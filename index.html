@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContaFácil | Control financiero</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--blue:#1d4ed8;--green:#15803d;--red:#b91c1c}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(120deg,#123a6d,#2563eb);color:white;padding:28px 20px}
+.wrap{max-width:1050px;margin:auto;padding:0 16px}header h1{margin:0 0 8px;font-size:30px}header p{margin:0;opacity:.9}
+main{padding:24px 0 40px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 3px 12px #0f172a08}
+.metric{font-size:13px;color:var(--muted);margin-bottom:10px}.amount{font-size:clamp(20px,3vw,28px);font-weight:700;overflow-wrap:anywhere}
+.green{color:var(--green)}.red{color:var(--red)}.blue{color:var(--blue)}
+.layout{display:grid;grid-template-columns:340px 1fr;gap:18px}.card h2{font-size:18px;margin:0 0 16px}
+label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+input,select{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:white;color:var(--ink)}
+button{border:0;border-radius:8px;padding:11px 14px;font-weight:700;cursor:pointer;font-size:14px}
+.primary{background:var(--blue);color:white;width:100%;margin-top:16px}.secondary{background:#e2e8f0;color:#1e293b}.danger{background:#fee2e2;color:#991b1b;padding:7px 9px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.toolbar select{width:auto;min-width:130px;flex:1}
+.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px}
+.tag{display:inline-block;padding:5px 8px;border-radius:99px;font-size:12px;font-weight:700}.tag.in{background:#dcfce7;color:#166534}.tag.out{background:#fee2e2;color:#991b1b}
+.notice{color:var(--muted);font-size:12px;line-height:1.5;margin-top:16px}.empty{text-align:center;color:var(--muted);padding:24px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+@media(max-width:760px){.cards{grid-template-columns:1fr}.layout{grid-template-columns:1fr}header h1{font-size:25px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>📊 ContaFácil</h1><p>Control sencillo de ingresos, gastos y saldo para pequeños negocios.</p></div></header>
+<main class="wrap">
+  <section class="cards">
+    <div class="card"><div class="metric">INGRESOS TOTALES</div><div class="amount green" id="totalIn">₡0</div></div>
+    <div class="card"><div class="metric">GASTOS TOTALES</div><div class="amount red" id="totalOut">₡0</div></div>
+    <div class="card"><div class="metric">SALDO DISPONIBLE</div><div class="amount blue" id="balance">₡0</div></div>
+  </section>
+  <section class="layout">
+    <div class="card">
+      <h2>➕ Registrar movimiento</h2>
+      <form id="entryForm">
+        <label for="type">Tipo de movimiento</label>
+        <select id="type" required><option value="Ingreso">Ingreso</option><option value="Gasto">Gasto</option></select>
+        <label for="concept">Concepto</label>
+        <input id="concept" maxlength="80" placeholder="Ej. Venta de productos" required>
+        <label for="category">Categoría</label>
+        <select id="category" required>
+          <option>Ventas</option><option>Servicios</option><option>Honorarios</option><option>Alquiler</option><option>Materiales</option><option>Transporte</option><option>Servicios públicos</option><option>Otros</option>
+        </select>
+        <label for="date">Fecha</label><input id="date" type="date" required>
+        <label for="amount">Monto (colones)</label><input id="amount" type="number" min="1" step="0.01" placeholder="Ej. 25000" required>
+        <button class="primary" type="submit">Guardar movimiento</button>
+      </form>
+      <p class="notice">Los datos se guardan en el almacenamiento local de este navegador. No se envían a un servidor. Evite ingresar información bancaria confidencial.</p>
+    </div>
+    <div class="card">
+      <h2>📋 Historial de movimientos</h2>
+      <div class="toolbar">
+        <select id="filter"><option value="Todos">Todos los movimientos</option><option value="Ingreso">Solo ingresos</option><option value="Gasto">Solo gastos</option></select>
+        <button class="secondary" id="export">Exportar CSV</button>
+        <button class="secondary" id="sample">Cargar ejemplo</button>
+        <button class="secondary" id="clear">Borrar todo</button>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div id="empty" class="empty">Todavía no hay movimientos. Registre el primero o cargue el ejemplo.</div>
+    </div>
+  </section>
+</main>
+<footer>ContaFácil · Prototipo educativo para practicar herramientas digitales de contabilidad.</footer>
+<script>
+const KEY='contafacil_movimientos_v1';
+let entries=[];
+try{entries=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(entries))entries=[]}catch(e){entries=[]}
+const $=id=>document.getElementById(id);
+const crc=n=>new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:2}).format(n);
+const today=()=>new Date().toLocaleDateString('en-CA');
+$('date').value=today();
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){alert('No se pudieron guardar los datos en este navegador. Exporte el reporte para conservarlo.')}render()}
+function render(){
+ const ins=entries.filter(x=>x.type==='Ingreso').reduce((s,x)=>s+x.amount,0);
+ const outs=entries.filter(x=>x.type==='Gasto').reduce((s,x)=>s+x.amount,0);
+ $('totalIn').textContent=crc(ins);$('totalOut').textContent=crc(outs);$('balance').textContent=crc(ins-outs);
+ $('balance').className='amount '+(ins-outs<0?'red':'blue');
+ const filtered=entries.filter(x=>$('filter').value==='Todos'||x.type===$('filter').value).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ $('rows').innerHTML='';
+ filtered.forEach(x=>{
+   const tr=document.createElement('tr');
+   const vals=[x.date,x.concept,x.type,crc(x.amount)];
+   vals.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i===2){const span=document.createElement('span');span.className='tag '+(x.type==='Ingreso'?'in':'out');span.textContent=v;td.textContent='';td.appendChild(span)}if(i===3)td.className=x.type==='Ingreso'?'green':'red';tr.appendChild(td)});
+   const td=document.createElement('td');const btn=document.createElement('button');btn.className='danger';btn.textContent='Eliminar';btn.onclick=()=>{entries=entries.filter(y=>y.id!==x.id);persist()};td.appendChild(btn);tr.appendChild(td);$('rows').appendChild(tr);
+ });
+ $('empty').style.display=filtered.length?'none':'block';
+}
+$('entryForm').addEventListener('submit',e=>{
+ e.preventDefault();const amount=Number($('amount').value),concept=$('concept').value.trim();
+ if(!concept||!Number.isFinite(amount)||amount<=0){alert('Ingrese un concepto y un monto mayor que cero.');return}
+ entries.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),type:$('type').value,concept,category:$('category').value,date:$('date').value,amount});
+ $('concept').value='';$('amount').value='';persist();
+});
+$('filter').addEventListener('change',render);
+$('export').onclick=()=>{
+ const data=[['Fecha','Concepto','Categoría','Tipo','Monto'],...entries.map(x=>[x.date,x.concept,x.category,x.type,x.amount])];
+ const csv=data.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n');
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='reporte_contafacil.csv';a.click();URL.revokeObjectURL(url);
+};
+$('sample').onclick=()=>{
+ if(entries.length&&!confirm('Se agregarán dos movimientos de ejemplo a los registros actuales. ¿Continuar?'))return;
+ const d=today();entries.push({id:'ej-in-'+Date.now(),type:'Ingreso',concept:'Venta de productos (ejemplo)',category:'Ventas',date:d,amount:150000},{id:'ej-out-'+Date.now(),type:'Gasto',concept:'Compra de materiales (ejemplo)',category:'Materiales',date:d,amount:45000});persist();
+};
+$('clear').onclick=()=>{if(confirm('¿Desea eliminar todos los movimientos guardados en este navegador?')){entries=[];persist()}};
+render();
+</script>
+</body>
+</html>
